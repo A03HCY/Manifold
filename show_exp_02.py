@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from config import set_scientific_style
+from plot import set_scientific_style
 
 def main() -> None:
     '''

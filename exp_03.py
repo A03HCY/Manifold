@@ -4,7 +4,7 @@ from manifold.utils import train_and_eval
 
 info.save('info/exp_03_sys.json')
 
-ep = 15
+ep = 30
 
 # with std=0
 train_loader_0, test_loader_0 = cifar(batch_size, std=0.0)

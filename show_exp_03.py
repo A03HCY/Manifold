@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from config import set_scientific_style, plot_smoothed
+from plot import set_scientific_style, plot_smoothed
 
 def main() -> None:
     '''

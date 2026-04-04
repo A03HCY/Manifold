@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Callable
-from manifold.ops import riemannian_manifold_linear
+from manifold.ops import riemannian_manifold_linear, riemannian_manifold_conv2d
 
 def benchmark(name: str, forward_func: Callable, backward_func: Callable, num_warmup: int = 10, num_iters: int = 100, num_trials: int = 10) -> None:
     '''
@@ -185,22 +185,111 @@ def main() -> None:
         
     benchmark('nn.Linear', fwd_nn, bwd_nn)
     
-    # 2. PyTorch Manifold
+    # 2. PyTorch Manifold Linear
     def fwd_pt() -> torch.Tensor:
         return riemannian_manifold_linear(x, w, kappa, lambda_rate, scale, bias, rule='near', op='pytorch')
     def bwd_pt(out: torch.Tensor) -> None:
         out.backward(grad_out, retain_graph=True)
         
-    benchmark('Manifold (PyTorch)', fwd_pt, bwd_pt)
+    benchmark('Manifold L (PyTorch)', fwd_pt, bwd_pt)
     
-    # 3. Triton Manifold
+    # 3. Triton Manifold Linear
     def fwd_tr() -> torch.Tensor:
         return riemannian_manifold_linear(x, w, kappa, lambda_rate, scale, bias, rule='near', op='triton')
     def bwd_tr(out: torch.Tensor) -> None:
         out.backward(grad_out, retain_graph=True)
         
-    benchmark('Manifold (Triton)', fwd_tr, bwd_tr)
+    benchmark('Manifold L (Triton)', fwd_tr, bwd_tr)
     print('-' * 115)
+
+    # =========================================================================
+    # CONV BENCHMARK
+    # =========================================================================
+    
+    conv_batch = 128
+    in_channels = 64
+    out_channels = 128
+    h, w_img = 32, 32
+    kernel_size = 3
+    padding = 1
+    
+    print(f'\nBenchmarking Conv with batch={conv_batch}, in_ch={in_channels}, out_ch={out_channels}, hw={h}x{w_img}, k={kernel_size}\n')
+    
+    cx = torch.randn(conv_batch, in_channels, h, w_img, device=device)
+    cw = torch.randn(out_channels, in_channels, kernel_size, kernel_size, device=device)
+    cb = torch.randn(out_channels, device=device)
+    cw_ones = torch.ones(1, in_channels, kernel_size, kernel_size, device=device)
+    
+    cx.requires_grad_(True)
+    cw.requires_grad_(True)
+    cb.requires_grad_(True)
+    
+    c_kappa = torch.tensor(1.0, device=device, requires_grad=True)
+    c_lambda = torch.tensor(0.5, device=device, requires_grad=True)
+    c_scale = torch.randn(out_channels, device=device, requires_grad=True)
+    c_bias = torch.randn(out_channels, device=device, requires_grad=True)
+    
+    c_grad_out = torch.randn(conv_batch, out_channels, h, w_img, device=device)
+    
+    # Correctness Check Conv
+    out_c_pt = riemannian_manifold_conv2d(cx, cw, cw_ones, c_kappa, c_lambda, c_scale, c_bias, padding=padding, op='pytorch')
+    out_c_pt.backward(c_grad_out, retain_graph=True)
+    
+    c_grad_x_pt = cx.grad.clone() if cx.grad is not None else None
+    c_grad_w_pt = cw.grad.clone() if cw.grad is not None else None
+    
+    cx.grad.zero_()
+    cw.grad.zero_()
+    c_kappa.grad.zero_()
+    c_lambda.grad.zero_()
+    c_scale.grad.zero_()
+    c_bias.grad.zero_()
+    
+    out_c_tr = riemannian_manifold_conv2d(cx, cw, cw_ones, c_kappa, c_lambda, c_scale, c_bias, padding=padding, op='triton')
+    out_c_tr.backward(c_grad_out, retain_graph=True)
+    
+    c_grad_x_tr = cx.grad.clone() if cx.grad is not None else None
+    c_grad_w_tr = cw.grad.clone() if cw.grad is not None else None
+    
+    print('Correctness Check Conv (Max Abs Diff):')
+    print(f"Output: {(out_c_pt - out_c_tr).abs().max().item():.6e}")
+    if c_grad_x_pt is not None and c_grad_x_tr is not None:
+        print(f"Grad X: {(c_grad_x_pt - c_grad_x_tr).abs().max().item():.6e}")
+    if c_grad_w_pt is not None and c_grad_w_tr is not None:
+        print(f"Grad W: {(c_grad_w_pt - c_grad_w_tr).abs().max().item():.6e}")
+    print()
+
+    # Benchmark Conv
+    print('-' * 115)
+    print(f"{'Method':20s} | {'Forward (ms)':17s} | {'Backward (ms)':17s} | {'Total (ms)':17s} | {'Fwd Mem(MB)':10s} | {'Bwd Mem(MB)':10s}")
+    print('-' * 115)
+    
+    conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, device=device)
+    conv_layer.weight.data.copy_(cw)
+    conv_layer.bias.data.copy_(cb)
+    
+    def fwd_c_nn() -> torch.Tensor:
+        return conv_layer(cx)
+    def bwd_c_nn(out: torch.Tensor) -> None:
+        out.backward(c_grad_out, retain_graph=True)
+        
+    benchmark('nn.Conv2d', fwd_c_nn, bwd_c_nn)
+    
+    def fwd_c_pt() -> torch.Tensor:
+        return riemannian_manifold_conv2d(cx, cw, cw_ones, c_kappa, c_lambda, c_scale, c_bias, padding=padding, op='pytorch')
+    def bwd_c_pt(out: torch.Tensor) -> None:
+        out.backward(c_grad_out, retain_graph=True)
+        
+    benchmark('Manifold C (PyTorch)', fwd_c_pt, bwd_c_pt)
+    
+    def fwd_c_tr() -> torch.Tensor:
+        return riemannian_manifold_conv2d(cx, cw, cw_ones, c_kappa, c_lambda, c_scale, c_bias, padding=padding, op='triton')
+    def bwd_c_tr(out: torch.Tensor) -> None:
+        out.backward(c_grad_out, retain_graph=True)
+        
+    benchmark('Manifold C (Triton)', fwd_c_tr, bwd_c_tr)
+    print('-' * 115)
+
 
 if __name__ == '__main__':
     main()

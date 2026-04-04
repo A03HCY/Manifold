@@ -346,6 +346,7 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
         scale (nn.Parameter): Vector amplifier for the hyperspherical network.
         bias (nn.Parameter): Manifold bias vector.
         weight_ones (torch.Tensor): Fixed all-ones kernel for computing patch norm rapidly.
+        use_norm (bool): Whether to scale the output by the input patch norm.
     '''
 
     def __init__(
@@ -360,7 +361,9 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
         lambda_init: float = 0.1,
         scale_init: float = 15.0,
         k_neighbors: int = 2,
-        rule: str = 'near'
+        rule: str = 'near',
+        use_norm_gate: bool = False,
+        use_norm: bool = False
     ) -> None:
         '''
         Initializes the RiemannianManifoldConv2d layer.
@@ -377,6 +380,7 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
             scale_init (float): Initial value for the vector amplifier scale.
             k_neighbors (int): Number of nearest neighbors for the Laplacian graph.
             rule (str): Attraction rule, either 'near' or 'far'.
+            use_norm (bool): Whether to scale the output by the input patch norm. Default: True.
         '''
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, k_neighbors)
 
@@ -385,6 +389,8 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
         self.lambda_rate = nn.Parameter(torch.tensor(float(lambda_init)))
         self.scale = nn.Parameter(torch.ones(out_channels) * scale_init)
         self.bias = nn.Parameter(torch.zeros(out_channels))
+        self.use_norm_gate = use_norm_gate
+        self.use_norm = use_norm
 
         # All-ones kernel for ultra-fast calculation of patch norm
         weight_ones = torch.ones(1, in_channels, *self.kernel_size)
@@ -407,35 +413,20 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
         Returns:
             torch.Tensor: The output manifold projection tensor.
         '''
-        # 1. Weight normalization
-        w_flat = self.weight.view(self.out_channels, -1)
-        w_norm_flat = F.normalize(w_flat, p=2, dim=1)
-        w_norm = w_norm_flat.view_as(self.weight)
-        
-        # 2. Ultra-fast calculation of the norm for each sliding patch of the input image
-        # x_sq: [batch, 1, H_out, W_out]
-        x_sq = F.conv2d(input_tensor ** 2, self.weight_ones, stride=self.stride, padding=self.padding, dilation=self.dilation)
-        x_norm_val = torch.sqrt(torch.clamp(x_sq, min=1e-6))
-        
-        # 3. Calculate Cosine Feature Map
-        # cosine: [batch, out_channels, H_out, W_out]
-        conv_proj = F.conv2d(input_tensor, w_norm, stride=self.stride, padding=self.padding, dilation=self.dilation)
-        cosine = conv_proj / (x_norm_val + 1e-6)
-        cosine = torch.clamp(cosine, -1.0 + 1e-6, 1.0 - 1e-6)
-        
-        # 4. vMF gravitational field calculation (applied pixel-wise)
-        theta = torch.acos(cosine)
-        exp_val = torch.exp(self.kappa * (cosine - 1.0))
-        attraction = exp_val if self.rule == 'near' else 1.0 - exp_val
-        
-        # 5. Riemannian geodesic pullback
-        safe_lambda = torch.clamp(self.lambda_rate, 1e-6, 1.0 - 1e-4)
-        effective_theta = theta * (1.0 - safe_lambda * attraction)
-        
-        # 6. Reconstruct the output (note the shape broadcasting)
-        scale_view = self.scale.view(1, -1, 1, 1)
-        bias_view = self.bias.view(1, -1, 1, 1)
-        
-        output = scale_view * torch.cos(effective_theta) + bias_view
-        
-        return output
+        # This implementation is moved to riemannian_manifold_conv2d in ops package
+        # to allow for triton acceleration.
+        from .ops import riemannian_manifold_conv2d
+        return riemannian_manifold_conv2d(
+            input_tensor=input_tensor,
+            weight=self.weight,
+            weight_ones=self.weight_ones,
+            kappa=self.kappa,
+            lambda_rate=self.lambda_rate,
+            scale=self.scale,
+            bias=self.bias,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+            rule=self.rule,
+            use_norm=self.use_norm
+        )

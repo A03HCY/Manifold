@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from config import set_scientific_style, plot_smoothed
+from plot import plot_smoothed, set_scientific_style
 
 def main() -> None:
     '''
@@ -28,7 +28,7 @@ def main() -> None:
     axs[0, 0].set_title('Train(std=0.0) -> Test(std=0.0)')
     axs[0, 0].set_xlabel('Epoch')
     axs[0, 0].set_ylabel('Test Accuracy (%)')
-    axs[0, 0].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[0, 0].grid(True, linestyle=':', color='#aaaaaa')
     axs[0, 0].legend(loc='lower right')
 
     # Plot 2: Train std=0, Test std=0.5
@@ -37,7 +37,7 @@ def main() -> None:
     axs[0, 1].set_title('Train(std=0.0) -> Test(std=0.5)')
     axs[0, 1].set_xlabel('Epoch')
     axs[0, 1].set_ylabel('Test Accuracy (%)')
-    axs[0, 1].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[0, 1].grid(True, linestyle=':', color='#aaaaaa')
     axs[0, 1].legend(loc='lower right')
 
     # Plot 3: Train std=0.5, Test std=0
@@ -46,7 +46,7 @@ def main() -> None:
     axs[1, 0].set_title('Train(std=0.5) -> Test(std=0.0)')
     axs[1, 0].set_xlabel('Epoch')
     axs[1, 0].set_ylabel('Test Accuracy (%)')
-    axs[1, 0].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[1, 0].grid(True, linestyle=':', color='#aaaaaa')
     axs[1, 0].legend(loc='lower right')
 
     # Plot 4: Train std=0.5, Test std=0.5
@@ -55,7 +55,7 @@ def main() -> None:
     axs[1, 1].set_title('Train(std=0.5) -> Test(std=0.5)')
     axs[1, 1].set_xlabel('Epoch')
     axs[1, 1].set_ylabel('Test Accuracy (%)')
-    axs[1, 1].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[1, 1].grid(True, linestyle=':', color='#aaaaaa')
     axs[1, 1].legend(loc='lower right')
 
     plt.tight_layout()
@@ -73,7 +73,7 @@ def main() -> None:
     ax1.set_title('Kappa Comparison')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Kappa')
-    ax1.grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    ax1.grid(True, linestyle=':', color='#aaaaaa')
     ax1.legend()
 
     # Plot fc3_lambda_rate
@@ -82,7 +82,7 @@ def main() -> None:
     ax2.set_title('Lambda Comparison')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Lambda')
-    ax2.grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    ax2.grid(True, linestyle=':', color='#aaaaaa')
     ax2.legend()
 
     plt.tight_layout()
