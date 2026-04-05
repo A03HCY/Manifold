@@ -1,10 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from plot import set_scientific_style
 
 def main() -> None:
     '''
     Reads the experiment results and plots the robustness of models under different noises.
     '''
+    set_scientific_style()
     # Load data
     csv_path = 'data/exp_05_robustness.csv'
     try:
@@ -35,7 +37,7 @@ def main() -> None:
             ax.set_xlabel(x_labels[i], fontsize=12)
             ax.set_ylabel('Accuracy', fontsize=12)
             ax.legend(fontsize=10)
-            ax.grid(True, linestyle='--', alpha=0.7)
+            ax.grid(True, linestyle='--')
             
             # Set integer/float ticks appropriately
             ax.set_xticks(params)

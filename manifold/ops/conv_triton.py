@@ -58,6 +58,93 @@ if JIT:
         # Store to HBM
         tl.store(out_ptr + offsets, out, mask=mask)
 
+    @triton.jit
+    def manifold_conv_fuse_kernel_backward(
+        grad_out_ptr, c_ptr, scale_ptr,
+        grad_c_ptr, grad_k_ptr, grad_l_ptr, grad_s_ptr, grad_b_ptr,
+        kappa_val, lambda_val,
+        n_elements, C, SPATIAL_SIZE,
+        BLOCK_SIZE: tl.constexpr, RULE_IS_NEAR: tl.constexpr
+    ):
+        '''
+        Backward pass fusion kernel for Convolution.
+        Calculates exact analytical gradients without saving intermediate tensors.
+        '''
+        pid = tl.program_id(axis=0)
+        block_start = pid * BLOCK_SIZE
+        offsets = block_start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < n_elements
+        
+        # For conv, shape is [B, C, H, W], so we find the channel index
+        feat_idx = (offsets // SPATIAL_SIZE) % C
+
+        # Load gradients and saved tensors
+        grad_out = tl.load(grad_out_ptr + offsets, mask=mask)
+        c = tl.load(c_ptr + offsets, mask=mask)
+        scale = tl.load(scale_ptr + feat_idx, mask=mask)
+
+        # Recompute intermediates (Registers are incredibly fast compared to HBM loads)
+        c_clamp = tl.maximum(c, -1.0 + 1e-6)
+        c_clamp = tl.minimum(c_clamp, 1.0 - 1e-6)
+
+        theta = libdevice.acos(c_clamp)
+        exp_val = tl.exp(kappa_val * (c_clamp - 1.0))
+
+        if RULE_IS_NEAR:
+            attraction = exp_val
+        else:
+            attraction = 1.0 - exp_val
+
+        safe_lambda = tl.maximum(lambda_val, 1e-6)
+        safe_lambda = tl.minimum(safe_lambda, 1.0 - 1e-4)
+        effective_theta = theta * (1.0 - safe_lambda * attraction)
+
+        # -- Gradients for Scale and Bias --
+        cos_teff = tl.cos(effective_theta)
+        sin_teff = tl.sin(effective_theta)
+        
+        grad_s = grad_out * cos_teff
+        grad_b = grad_out
+
+        # -- Gradients for Theta_eff --
+        g_teff = grad_out * (-scale * sin_teff)
+
+        # -- Gradients for Lambda --
+        grad_l = g_teff * (-theta * attraction)
+
+        # -- Gradients for Kappa and Cosine (c) --
+        d_teff_d_theta = 1.0 - safe_lambda * attraction
+        d_teff_d_attr = -theta * safe_lambda
+
+        # d(theta) / d(c_clamp)
+        denom = tl.maximum(1.0 - c_clamp * c_clamp, 1e-7)
+        d_theta_d_c = -1.0 / tl.sqrt(denom)
+
+        # d(attraction) / d(...)
+        if RULE_IS_NEAR:
+            d_attr_d_k = exp_val * (c_clamp - 1.0)
+            d_attr_d_c = exp_val * kappa_val
+        else:
+            d_attr_d_k = -exp_val * (c_clamp - 1.0)
+            d_attr_d_c = -exp_val * kappa_val
+
+        grad_k = g_teff * d_teff_d_attr * d_attr_d_k
+
+        # Chain rule back to c_clamp
+        d_teff_d_c = (d_teff_d_theta * d_theta_d_c) + (d_teff_d_attr * d_attr_d_c)
+        grad_c = g_teff * d_teff_d_c
+
+        # Enforce clamp gradient gating (only propagate if within bounds)
+        in_bounds = (c > -1.0 + 1e-6) & (c < 1.0 - 1e-6)
+        grad_c = tl.where(in_bounds, grad_c, 0.0)
+
+        # Store gradients to HBM
+        tl.store(grad_c_ptr + offsets, grad_c, mask=mask)
+        tl.store(grad_k_ptr + offsets, grad_k, mask=mask)
+        tl.store(grad_l_ptr + offsets, grad_l, mask=mask)
+        tl.store(grad_s_ptr + offsets, grad_s, mask=mask)
+        tl.store(grad_b_ptr + offsets, grad_b, mask=mask)
+
 
     class ManifoldConvFuseFunction(torch.autograd.Function):
         @staticmethod
@@ -92,29 +179,39 @@ if JIT:
             rule = ctx.rule
             grad_out = grad_out.contiguous()
 
-            # Using PyTorch native autograd for backward pass
-            with torch.enable_grad():
-                cosine_req = cosine.detach().requires_grad_(True)
-                kappa_req = kappa.detach().requires_grad_(True)
-                lambda_req = lambda_rate.detach().requires_grad_(True)
-                scale_req = scale.detach().requires_grad_(True)
-                bias_req = bias.detach().requires_grad_(True)
+            # Allocate gradient grids
+            grad_c = torch.empty_like(cosine)
+            grad_k_grid = torch.empty_like(cosine)
+            grad_l_grid = torch.empty_like(cosine)
+            grad_s_grid = torch.empty_like(cosine)
+            grad_b_grid = torch.empty_like(cosine)
 
-                c_clamp = torch.clamp(cosine_req, -1.0 + 1e-6, 1.0 - 1e-6)
-                theta = torch.acos(c_clamp)
-                exp_val = torch.exp(kappa_req * (c_clamp - 1.0))
+            n_elements = cosine.numel()
+            C = cosine.size(1)
+            SPATIAL_SIZE = cosine[0, 0].numel()
+            
+            grid = lambda meta: (triton.cdiv(n_elements, meta['BLOCK_SIZE']),)
+            rule_is_near = (rule == 'near')
 
-                if rule == 'near':
-                    attraction = exp_val
-                else:
-                    attraction = 1.0 - exp_val
+            manifold_conv_fuse_kernel_backward[grid](
+                grad_out, cosine, scale,
+                grad_c, grad_k_grid, grad_l_grid, grad_s_grid, grad_b_grid,
+                kappa.item(), lambda_rate.item(),
+                n_elements, C, SPATIAL_SIZE,
+                BLOCK_SIZE=1024, RULE_IS_NEAR=rule_is_near
+            )
 
-                safe_lambda = torch.clamp(lambda_req, 1e-6, 1.0 - 1e-4)
-                effective_theta = theta * (1.0 - safe_lambda * attraction)
+            # Python-level reduction
+            grad_kappa = grad_k_grid.sum().view_as(kappa)
+            grad_lambda = grad_l_grid.sum().view_as(lambda_rate)
 
-                view_shape = [1, scale_req.size(0)] + [1] * (cosine_req.dim() - 2)
-                out = scale_req.view(*view_shape) * torch.cos(effective_theta) + bias_req.view(*view_shape)
+            # Gate lambda gradients based on forward clamp bounds
+            l_val = lambda_rate.item()
+            if l_val <= 1e-6 or l_val >= 1.0 - 1e-4:
+                grad_lambda.zero_()
 
-                out.backward(grad_out)
+            # Conv specific reduction: sum over Batch (dim 0), H (dim 2), W (dim 3)
+            grad_scale = grad_s_grid.sum(dim=(0, 2, 3)).view_as(scale)
+            grad_bias = grad_b_grid.sum(dim=(0, 2, 3)).view_as(bias)
 
-                return cosine_req.grad, kappa_req.grad, lambda_req.grad, scale_req.grad, bias_req.grad, None
+            return grad_c, grad_kappa, grad_lambda, grad_scale, grad_bias, None

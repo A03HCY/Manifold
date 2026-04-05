@@ -8,7 +8,7 @@ from manifold.utils import evaluate_topk
 from manifold.vit import vit_cifar100
 
 def main() -> None:
-    # Initialize 2 models
+    # Initialize the 2 models from exp_06
     baseline_5 = vit_cifar100().to(device)
     manifold_5 = vit_cifar100('manifold').to(device)
 
@@ -21,17 +21,17 @@ def main() -> None:
         print(f"Error loading weights: {e}. Please ensure exp_06.py has been run and models are saved.")
         return
 
-    # Define noise levels
+    # Define Gaussian noise levels
     stds = np.round(np.arange(0.0, 1.25, 0.05), 2)
 
     results = []
 
-    print("Evaluating models over different noise levels on CIFAR-100...")
+    print("Evaluating models over different Gaussian noise levels on CIFAR-100...")
     for std in tqdm(stds):
         # Get test loader for CIFAR-100 with the specified std
         _, test_loader = cifar_100(batch_size, std=std)
         
-        # Evaluate models
+        # Evaluate models (Top-1 and Top-5)
         res_b5 = evaluate_topk(baseline_5, test_loader, device, topk=(1, 5))
         res_m5 = evaluate_topk(manifold_5, test_loader, device, topk=(1, 5))
         
@@ -45,7 +45,7 @@ def main() -> None:
 
     # Save to CSV
     df = pd.DataFrame(results)
-    csv_path = 'data/exp_07_noise_acc.csv'
+    csv_path = 'data/exp_08_noise_acc.csv'
     df.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path}")
 

@@ -1,4 +1,4 @@
-from manifold.model import RiemannianManifoldLinear
+from manifold.model import RiemannianManifoldLinear, MainfoldLoss
 from codon.ops.attention import apply_attention, AttentionOutput
 
 from codon.base import *
@@ -9,10 +9,15 @@ class ViTBlock(BasicModel):
     def __init__(
         self,
         model_dim: int = 768,
+        num_heads: int = 12,
         mlp_ratio: int = 4,
         linear_type: str = 'linear',
     ):
         super().__init__()
+
+        self.num_heads = num_heads
+        if model_dim % num_heads != 0:
+            raise ValueError(f'model_dim ({model_dim}) must be divisible by num_heads ({num_heads})')
 
         self.linear_type = linear_type.lower().strip()
         if not self.linear_type in ['linear', 'manifold']:
@@ -45,11 +50,14 @@ class ViTBlock(BasicModel):
         self.mlp.fc2 = RiemannianManifoldLinear(hidden_features, out_features)
     
     def forward(self, x: torch.Tensor):
+        B, S, C = x.shape
         x_norm = self.norm_1(x)
 
-        q = self.q_proj(x_norm)
-        k = self.k_proj(x_norm)
-        v = self.v_proj(x_norm)
+        head_dim = C // self.num_heads
+
+        q = self.q_proj(x_norm).view(B, S, self.num_heads, head_dim).transpose(1, 2)
+        k = self.k_proj(x_norm).view(B, S, self.num_heads, head_dim).transpose(1, 2)
+        v = self.v_proj(x_norm).view(B, S, self.num_heads, head_dim).transpose(1, 2)
 
         output: AttentionOutput = apply_attention(
             query_states=q,
@@ -57,7 +65,9 @@ class ViTBlock(BasicModel):
             value_states=v,
             is_causal=False
         )
-        x = x + self.o_proj(output.output)
+        
+        attn_out = output.output.transpose(1, 2).contiguous().view(B, S, C)
+        x = x + self.o_proj(attn_out)
 
         x_norm = self.norm_2(x)
         x = x + self.mlp(x_norm)
@@ -85,6 +95,7 @@ class ViT(BasicModel):
         in_channels: int = 3,
         num_classes: int = 1000,
         model_dim: int = 768,
+        num_heads: int = 12,
         depth: int = 12,
         mlp_ratio: int = 4,
         linear_type: str = 'linear',
@@ -98,6 +109,7 @@ class ViT(BasicModel):
             in_channels (int): Number of input channels.
             num_classes (int): Number of classes for classification.
             model_dim (int): Dimensionality of the embeddings.
+            num_heads (int): Number of attention heads.
             depth (int): Number of Transformer blocks.
             mlp_ratio (int): Expansion ratio for the MLP hidden dimension.
             linear_type (str): Type of linear layer ('linear' or 'manifold').
@@ -117,6 +129,7 @@ class ViT(BasicModel):
         self.blocks = nn.ModuleList([
             ViTBlock(
                 model_dim=model_dim,
+                num_heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 linear_type=linear_type
             )
@@ -168,6 +181,35 @@ class ViT(BasicModel):
         output = self.head(cls_output)
         
         return output
+    
+    @property
+    def manifold_loss(self) -> torch.Tensor:
+        '''
+        Computes the accumulated manifold loss (cosine + Laplacian) for all manifold layers.
+
+        Returns:
+            torch.Tensor: The total calculated manifold loss. Returns 0.0 if no manifold layers exist.
+        '''
+        total_cos = 0.0
+        total_lap = 0.0
+        has_manifold = False
+
+        for module in self.modules():
+            if hasattr(module, 'compute_loss') and callable(module.compute_loss):
+                loss: MainfoldLoss = module.compute_loss()
+                if not has_manifold:
+                    total_cos = loss.cosine
+                    total_lap = loss.laplacian
+                    has_manifold = True
+                else:
+                    total_cos = total_cos + loss.cosine
+                    total_lap = total_lap + loss.laplacian
+        
+        if not has_manifold:
+            device = next(self.parameters()).device
+            return torch.tensor(0.0, device=device)
+            
+        return MainfoldLoss(cosine=total_cos, laplacian=total_lap).factor_loss()
 
 
 def vit_cifar100(linear_type: str = 'linear') -> ViT:
@@ -186,6 +228,7 @@ def vit_cifar100(linear_type: str = 'linear') -> ViT:
         in_channels=3,
         num_classes=100,
         model_dim=384,
+        num_heads=12,
         depth=6,
         mlp_ratio=4,
         linear_type=linear_type

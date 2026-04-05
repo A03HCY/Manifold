@@ -25,37 +25,37 @@ def main() -> None:
     # Plot 1: Train std=0, Test std=0
     plot_smoothed(axs[0, 0], df_base_0['epoch'], df_base_0['test_acc_0'], label='Baseline Conv', color=base_color)
     plot_smoothed(axs[0, 0], df_man_0['epoch'], df_man_0['test_acc_0'], label='Manifold Conv', color=man_color)
-    axs[0, 0].set_title('Train(std=0.0) -> Test(std=0.0)')
+    axs[0, 0].set_title('Train(std=0.0) → Test(std=0.0)')
     axs[0, 0].set_xlabel('Epoch')
     axs[0, 0].set_ylabel('Test Accuracy (%)')
-    axs[0, 0].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[0, 0].grid(True, linestyle=':', color='#aaaaaa')
     axs[0, 0].legend(loc='lower right')
 
     # Plot 2: Train std=0, Test std=0.5
     plot_smoothed(axs[0, 1], df_base_0['epoch'], df_base_0['test_acc_5'], label='Baseline Conv', color=base_color)
     plot_smoothed(axs[0, 1], df_man_0['epoch'], df_man_0['test_acc_5'], label='Manifold Conv', color=man_color)
-    axs[0, 1].set_title('Train(std=0.0) -> Test(std=0.5)')
+    axs[0, 1].set_title('Train(std=0.0) → Test(std=0.5)')
     axs[0, 1].set_xlabel('Epoch')
     axs[0, 1].set_ylabel('Test Accuracy (%)')
-    axs[0, 1].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[0, 1].grid(True, linestyle=':', color='#aaaaaa')
     axs[0, 1].legend(loc='lower right')
 
     # Plot 3: Train std=0.5, Test std=0
     plot_smoothed(axs[1, 0], df_base_5['epoch'], df_base_5['test_acc_0'], label='Baseline Conv', color=base_color)
     plot_smoothed(axs[1, 0], df_man_5['epoch'], df_man_5['test_acc_0'], label='Manifold Conv', color=man_color)
-    axs[1, 0].set_title('Train(std=0.5) -> Test(std=0.0)')
+    axs[1, 0].set_title('Train(std=0.5) → Test(std=0.0)')
     axs[1, 0].set_xlabel('Epoch')
     axs[1, 0].set_ylabel('Test Accuracy (%)')
-    axs[1, 0].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[1, 0].grid(True, linestyle=':', color='#aaaaaa')
     axs[1, 0].legend(loc='lower right')
 
     # Plot 4: Train std=0.5, Test std=0.5
     plot_smoothed(axs[1, 1], df_base_5['epoch'], df_base_5['test_acc_5'], label='Baseline Conv', color=base_color)
     plot_smoothed(axs[1, 1], df_man_5['epoch'], df_man_5['test_acc_5'], label='Manifold Conv', color=man_color)
-    axs[1, 1].set_title('Train(std=0.5) -> Test(std=0.5)')
+    axs[1, 1].set_title('Train(std=0.5) → Test(std=0.5)')
     axs[1, 1].set_xlabel('Epoch')
     axs[1, 1].set_ylabel('Test Accuracy (%)')
-    axs[1, 1].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[1, 1].grid(True, linestyle=':', color='#aaaaaa')
     axs[1, 1].legend(loc='lower right')
 
     plt.tight_layout()
@@ -73,7 +73,7 @@ def main() -> None:
     ax1.set_title('Kappa Comparison (Conv4)')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Kappa')
-    ax1.grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    ax1.grid(True, linestyle=':', color='#aaaaaa')
     ax1.legend()
 
     # Plot conv4_lambda_rate
@@ -82,7 +82,7 @@ def main() -> None:
     ax2.set_title('Lambda Comparison (Conv4)')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Lambda')
-    ax2.grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    ax2.grid(True, linestyle=':', color='#aaaaaa')
     ax2.legend()
 
     plt.tight_layout()

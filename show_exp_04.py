@@ -1,10 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from plot import set_scientific_style
 
 def main() -> None:
     '''
     Reads the accuracy results over different noise levels from CSV and plots them for exp_04.
     '''
+    set_scientific_style()
     csv_path = 'data/exp_04_noise_acc.csv'
     
     try:

@@ -5,6 +5,10 @@ from manifold.vit import vit_cifar100
 
 info.save('info/exp_06_sys.json')
 
+leaning_rate = 1e-4
+
+print(f'[exp_06.py] lr changed to {leaning_rate}')
+
 ep = 30
 
 # Test loader with std=0
@@ -19,6 +23,8 @@ manifold = vit_cifar100('manifold').to(device)
 
 print(f"Baseline Params: {baseline.count_params(human_readable=True)}")
 print(f"Manifold Params: {manifold.count_params(human_readable=True)}")
+
+print(manifold.blocks[0].mlp.fc1)
 
 # Optimizers
 baseline_opt = Adam(baseline.parameters(), lr=leaning_rate)

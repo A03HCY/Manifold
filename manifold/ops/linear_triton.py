@@ -204,7 +204,7 @@ if JIT:
             if l_val <= 1e-6 or l_val >= 1.0 - 1e-4:
                 grad_lambda.zero_()
 
-            grad_scale = grad_s_grid.sum(dim=0).view_as(scale)
-            grad_bias = grad_b_grid.sum(dim=0).view_as(bias)
+            grad_scale = grad_s_grid.view(-1, N).sum(dim=0).view_as(scale)
+            grad_bias = grad_b_grid.view(-1, N).sum(dim=0).view_as(bias)
 
             return grad_c, grad_kappa, grad_lambda, grad_scale, grad_bias, None

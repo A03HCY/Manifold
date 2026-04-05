@@ -24,7 +24,7 @@ def main() -> None:
     axs[0].set_title('Train(std=0.5) -> Test(std=0.0)')
     axs[0].set_xlabel('Epoch')
     axs[0].set_ylabel('Test Accuracy (%)')
-    axs[0].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[0].grid(True, linestyle=':', color='#aaaaaa')
     axs[0].legend(loc='lower right')
 
     # Plot 2: Train std=0.5, Test std=0.5
@@ -33,7 +33,7 @@ def main() -> None:
     axs[1].set_title('Train(std=0.5) -> Test(std=0.5)')
     axs[1].set_xlabel('Epoch')
     axs[1].set_ylabel('Test Accuracy (%)')
-    axs[1].grid(True, linestyle=':', alpha=0.6, color='#aaaaaa')
+    axs[1].grid(True, linestyle=':', color='#aaaaaa')
     axs[1].legend(loc='lower right')
 
     plt.tight_layout()

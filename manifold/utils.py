@@ -29,6 +29,34 @@ def test(model: torch.nn.Module, data_loader: torch.utils.data.DataLoader, devic
 
         return acc_loss, accuracy
 
+def evaluate_topk(model: torch.nn.Module, data_loader: torch.utils.data.DataLoader, device, topk=(1, 5)):
+    '''
+    Evaluates the model and computes the accuracy over the k top predictions
+    for the specified values of k.
+    '''
+    maxk = max(topk)
+    correct_k = {k: 0 for k in topk}
+    total = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for data, target in data_loader:
+            data, target = data.to(device), target.to(device)
+            
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
+                logits = model(data)
+                
+            _, pred = logits.topk(maxk, 1, True, True)
+            pred = pred.t()
+            correct = pred.eq(target.view(1, -1).expand_as(pred))
+            
+            total += target.size(0)
+            for k in topk:
+                correct_k[k] += correct[:k].reshape(-1).float().sum(0, keepdim=True).item()
+
+    res = {f'top{k}': 100 * correct_k[k] / total for k in topk}
+    return res
+
 import pandas as pd
 from tqdm import tqdm
 
@@ -54,22 +82,24 @@ def train_and_eval(model, opt, criterion, train_loader, test_loader_0, test_load
         model.train()
         total_loss = 0.0
         
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}")
+        pbar = tqdm(train_loader, desc=f'Epoch {epoch}/{epochs}')
         for data, target in pbar:
             data, target = data.to(device), target.to(device)
             
             opt.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
             
-            if is_manifold:
-                loss += model.manifold_loss
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
+                output = model(data)
+                loss = criterion(output, target)
+                
+                if is_manifold:
+                    loss += model.manifold_loss
                 
             loss.backward()
             opt.step()
             
             total_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            pbar.set_postfix(loss=f'{loss.item():.4f}')
             
         avg_train_loss = total_loss / len(train_loader)
         test_acc_loss_0, test_acc_0 = test(model, test_loader_0, device)
@@ -100,8 +130,8 @@ def train_and_eval(model, opt, criterion, train_loader, test_loader_0, test_load
                     layer_idx += 1
                 
         results.append(row)
-        print(f"Test Acc(std=0): {test_acc_0:.2f}% | Test Acc(std=0.5): {test_acc_5:.2f}% | Avg Train Loss: {avg_train_loss:.4f}\n")
+        print(f'Test Acc(std=0): {test_acc_0:.2f}% | Test Acc(std=0.5): {test_acc_5:.2f}% | Avg Train Loss: {avg_train_loss:.4f}\n')
         
     df = pd.DataFrame(results)
     df.to_csv(save_csv_path, index=False)
-    print(f"Saved results to {save_csv_path}")
+    print(f'Saved results to {save_csv_path}')

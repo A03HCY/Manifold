@@ -4,18 +4,19 @@ from plot import set_scientific_style
 
 def main() -> None:
     '''
-    Reads the accuracy results over different noise levels from CSV and plots them.
+    Reads the accuracy results over different Gaussian noise levels from CSV and plots them.
     '''
-    csv_path = 'data/exp_07_noise_acc.csv'
+    csv_path = 'data/exp_08_noise_acc.csv'
     
     try:
         df = pd.DataFrame(pd.read_csv(csv_path))
     except FileNotFoundError:
-        print(f"Error: {csv_path} not found. Please run exp_07.py first.")
+        print(f"Error: {csv_path} not found. Please run exp_08.py first.")
         return
 
     set_scientific_style()
     
+    # Create 2 subplots (2 rows, 1 column)
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
     base_color = '#1f77b4' # Scientific blue
@@ -39,7 +40,7 @@ def main() -> None:
     ax2.legend()
     
     plt.tight_layout()
-    save_path = 'data/exp_07_noise_acc.png'
+    save_path = 'data/exp_08_noise_acc.png'
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
     plt.show()

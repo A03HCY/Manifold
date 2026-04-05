@@ -25,7 +25,7 @@ def main() -> None:
     # Plot 1: Train std=0, Test std=0
     plot_smoothed(axs[0, 0], df_base_0['epoch'], df_base_0['test_acc_0'], label='Baseline', color=base_color)
     plot_smoothed(axs[0, 0], df_man_0['epoch'], df_man_0['test_acc_0'], label='Manifold', color=man_color)
-    axs[0, 0].set_title('Train(std=0.0) -> Test(std=0.0)')
+    axs[0, 0].set_title('Train(std=0.0) → Test(std=0.0)')
     axs[0, 0].set_xlabel('Epoch')
     axs[0, 0].set_ylabel('Test Accuracy (%)')
     axs[0, 0].grid(True, linestyle=':', color='#aaaaaa')
@@ -34,7 +34,7 @@ def main() -> None:
     # Plot 2: Train std=0, Test std=0.5
     plot_smoothed(axs[0, 1], df_base_0['epoch'], df_base_0['test_acc_5'], label='Baseline', color=base_color)
     plot_smoothed(axs[0, 1], df_man_0['epoch'], df_man_0['test_acc_5'], label='Manifold', color=man_color)
-    axs[0, 1].set_title('Train(std=0.0) -> Test(std=0.5)')
+    axs[0, 1].set_title('Train(std=0.0) → Test(std=0.5)')
     axs[0, 1].set_xlabel('Epoch')
     axs[0, 1].set_ylabel('Test Accuracy (%)')
     axs[0, 1].grid(True, linestyle=':', color='#aaaaaa')
@@ -43,7 +43,7 @@ def main() -> None:
     # Plot 3: Train std=0.5, Test std=0
     plot_smoothed(axs[1, 0], df_base_5['epoch'], df_base_5['test_acc_0'], label='Baseline', color=base_color)
     plot_smoothed(axs[1, 0], df_man_5['epoch'], df_man_5['test_acc_0'], label='Manifold', color=man_color)
-    axs[1, 0].set_title('Train(std=0.5) -> Test(std=0.0)')
+    axs[1, 0].set_title('Train(std=0.5) → Test(std=0.0)')
     axs[1, 0].set_xlabel('Epoch')
     axs[1, 0].set_ylabel('Test Accuracy (%)')
     axs[1, 0].grid(True, linestyle=':', color='#aaaaaa')
@@ -52,7 +52,7 @@ def main() -> None:
     # Plot 4: Train std=0.5, Test std=0.5
     plot_smoothed(axs[1, 1], df_base_5['epoch'], df_base_5['test_acc_5'], label='Baseline', color=base_color)
     plot_smoothed(axs[1, 1], df_man_5['epoch'], df_man_5['test_acc_5'], label='Manifold', color=man_color)
-    axs[1, 1].set_title('Train(std=0.5) -> Test(std=0.5)')
+    axs[1, 1].set_title('Train(std=0.5) → Test(std=0.5)')
     axs[1, 1].set_xlabel('Epoch')
     axs[1, 1].set_ylabel('Test Accuracy (%)')
     axs[1, 1].grid(True, linestyle=':', color='#aaaaaa')
