@@ -430,3 +430,103 @@ class RiemannianManifoldConv2d(BasicManifoldConv2d):
             rule=self.rule,
             use_norm=self.use_norm
         )
+
+
+class RiemannianResidualManifoldLinear(RiemannianManifoldLinear):
+    '''
+    A Riemannian Manifold Linear layer with a Spherical Residual connection 
+    to defend against targeted gradient attacks (e.g., PGD).
+    
+    Attributes:
+        gamma (nn.Parameter): Learnable residual strength.
+    '''
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        kappa_init: float = 2.0,
+        lambda_init: float = 0.1,
+        scale_init: float = 15.0,
+        k_neighbors: int = 2,
+        rule: str = 'near',
+        gamma_init: float = 0.1  # Starts with a small residual pull
+    ) -> None:
+        super().__init__(
+            in_features=in_features,
+            out_features=out_features,
+            kappa_init=kappa_init,
+            lambda_init=lambda_init,
+            scale_init=scale_init,
+            k_neighbors=k_neighbors,
+            rule=rule
+        )
+        if in_features != out_features:
+            raise ValueError("Residual connection requires in_features == out_features")
+            
+        # Learnable residual strength
+        self.gamma = nn.Parameter(torch.tensor(float(gamma_init)))
+
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        # 1. Compute manifold projection
+        manifold_out = super().forward(input_tensor)
+        
+        # 2. Spherical Residual interpolation (x + \gamma * F(x))
+        residual_sum = input_tensor + self.gamma * manifold_out
+        
+        return residual_sum * self.scale
+
+
+class RiemannianResidualManifoldConv2d(RiemannianManifoldConv2d):
+    '''
+    A Riemannian Manifold Conv2d layer with a Spherical Residual connection.
+    '''
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        kappa_init: float = 2.0,
+        lambda_init: float = 0.1,
+        scale_init: float = 15.0,
+        k_neighbors: int = 2,
+        rule: str = 'near',
+        use_norm_gate: bool = False,
+        use_norm: bool = False,
+        gamma_init: float = 0.1
+    ) -> None:
+        super().__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            kappa_init=kappa_init,
+            lambda_init=lambda_init,
+            scale_init=scale_init,
+            k_neighbors=k_neighbors,
+            rule=rule,
+            use_norm_gate=use_norm_gate,
+            use_norm=use_norm
+        )
+        
+        # Check if spatial and channel dimensions allow for residual connection
+        if in_channels != out_channels or stride != 1:
+            raise ValueError("Spherical Residual Conv requires in_channels == out_channels and stride == 1")
+            
+        self.gamma = nn.Parameter(torch.tensor(float(gamma_init)))
+
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        # 1. Compute manifold projection
+        manifold_out = super().forward(input_tensor)
+        
+        # 2. Add residual (shapes match due to init checks and padding assumptions)
+        residual_sum = input_tensor + self.gamma * manifold_out
+        
+        # 3. Re-apply spatial scale (view to [1, C, 1, 1])
+        scale_view = self.scale.view(1, -1, 1, 1)
+        
+        return residual_sum * scale_view

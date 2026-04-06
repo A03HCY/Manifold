@@ -31,6 +31,7 @@ class ViTBlock(BasicModel):
 
         self.norm_1 = nn.RMSNorm(model_dim)
         self.norm_2 = nn.RMSNorm(model_dim)
+        self.manifold = False
 
         mlp_hidden_dim = int(model_dim * mlp_ratio)
         self.mlp = MLP(
@@ -42,6 +43,8 @@ class ViTBlock(BasicModel):
         if self.linear_type == 'manifold': self.to_manifold()
     
     def to_manifold(self):
+        self.manifold = True
+
         in_features = self.mlp.in_features
         hidden_features = self.mlp.hidden_features
         out_features = self.mlp.out_features
@@ -69,8 +72,12 @@ class ViTBlock(BasicModel):
         attn_out = output.output.transpose(1, 2).contiguous().view(B, S, C)
         x = x + self.o_proj(attn_out)
 
-        x_norm = self.norm_2(x)
+        if not self.manifold:
+            x_norm = self.norm_2(x)
+        else:
+            x_norm = x
         x = x + self.mlp(x_norm)
+
 
         return x
 
